@@ -21,7 +21,16 @@ export default async (req) => {
   const store = getStore({ name: 'feedback', consistency: 'strong' });
   const read = async () => (await store.get(KEY, { type: 'json' })) || [];
 
+  // 남긴 글은 관리자만 읽는다. 화면에서 숨기는 것만으로는 주소를 아는 사람이
+  // 그대로 받아볼 수 있으므로, 여기서 막는다.
   if (req.method === 'GET') {
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey) {
+      return json({ error: 'ADMIN_KEY가 설정되지 않아 의견을 볼 수 없습니다.' }, 501);
+    }
+    if (req.headers.get('x-admin-key') !== adminKey) {
+      return json({ error: '관리자만 볼 수 있습니다.' }, 403);
+    }
     const entries = await read();
     return json({ entries: entries.slice().reverse() });   // 최신 글이 위로
   }

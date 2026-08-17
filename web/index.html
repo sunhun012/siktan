@@ -651,7 +651,7 @@
 <dialog id="feedbackDialog">
   <div class="modal-in feedback">
     <h2>불편한 점이 있나요?</h2>
-    <p>고쳤으면 하는 것, 있었으면 하는 기능을 남겨주세요. 남긴 의견은 모두에게 보입니다.</p>
+    <p>고쳤으면 하는 것, 있었으면 하는 기능을 남겨주세요. 남긴 의견은 만든 사람만 봅니다.</p>
 
     <form id="feedbackForm">
       <textarea id="fbMessage" rows="3" maxlength="500" required
@@ -1292,7 +1292,7 @@
     else localStorage.removeItem(LS.admin);
     $('btnSaveAdmin').textContent = '저장됨';
     setTimeout(() => { $('btnSaveAdmin').textContent = '저장'; }, 1400);
-    renderFeedback();
+    loadFeedback();
   });
 
   $('btnClearCache').addEventListener('click', () => {
@@ -1327,12 +1327,18 @@
   let fbEntries = [];
 
   function renderFeedback() {
+    if (!adminKey()) {
+      fbEntries = [];
+      fbNote('남긴 의견은 만든 사람에게만 전달됩니다.');
+      return;
+    }
+
     const entries = fbEntries;
     const list = $('fbList');
     list.textContent = '';
 
     if (!entries.length) {
-      list.append(el('li', 'fb-empty', '아직 남긴 의견이 없습니다. 첫 번째로 남겨보세요.'));
+      list.append(el('li', 'fb-empty', '아직 남긴 의견이 없습니다.'));
       return;
     }
 
@@ -1355,16 +1361,30 @@
     }
   }
 
+  function fbNote(text) {
+    const list = $('fbList');
+    list.textContent = '';
+    list.append(el('li', 'fb-empty', text));
+  }
+
   async function loadFeedback() {
+    // 관리자 키가 없으면 애초에 요청하지 않는다.
+    if (!adminKey()) {
+      fbEntries = [];
+      fbNote('남긴 의견은 만든 사람에게만 전달됩니다.');
+      return;
+    }
     try {
-      const res = await fetch(FB_API, { headers: { Accept: 'application/json' } });
-      if (!res.ok) throw new Error(String(res.status));
+      const res = await fetch(FB_API, {
+        headers: { Accept: 'application/json', 'x-admin-key': adminKey() }
+      });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '');
       fbEntries = data.entries || [];
       renderFeedback();
-    } catch {
-      $('fbList').textContent = '';
-      $('fbList').append(el('li', 'fb-empty', '남긴 의견을 불러오지 못했습니다.'));
+    } catch (err) {
+      fbEntries = [];
+      fbNote(err.message || '남긴 의견을 불러오지 못했습니다.');
     }
   }
 
@@ -1406,7 +1426,7 @@
       if (!res.ok) throw new Error(data.error || '');
       $('fbMessage').value = '';
       fbSay('남겼습니다. 고맙습니다.', 'done');
-      if (data.entry) { fbEntries = [data.entry, ...fbEntries]; renderFeedback(); }
+      if (data.entry && adminKey()) { fbEntries = [data.entry, ...fbEntries]; renderFeedback(); }
     } catch (err) {
       fbSay(err.message || '남기지 못했습니다. 인터넷 연결을 확인해 주세요.', 'error');
     } finally {
