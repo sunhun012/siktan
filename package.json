@@ -1,0 +1,9 @@
+{
+  "name": "siktan",
+  "private": true,
+  "type": "module",
+  "description": "오늘의 식판 - 급식표 웹앱",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}

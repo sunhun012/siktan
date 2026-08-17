@@ -1,6 +1,6 @@
 // 오프라인에서도 앱이 열리도록 화면 자체를 캐시한다.
 // 급식 데이터는 앱이 localStorage에 따로 저장하므로 여기서 다루지 않는다.
-const CACHE = 'siktan-v1';
+const CACHE = 'siktan-v2';
 const SHELL = [
   './',
   './index.html',
@@ -24,8 +24,11 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  // 나이스 API 요청은 건드리지 않고 그대로 통과시킨다.
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  const url = new URL(req.url);
+  // 나이스 API와 의견 게시판은 건드리지 않고 그대로 통과시킨다.
+  // (게시판을 캐시하면 남들이 방금 쓴 글이 안 보인다.)
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/.netlify/')) return;
 
   // 화면은 새 버전을 먼저 확인하고, 실패하면 캐시로 연다.
   if (req.mode === 'navigate' || req.destination === 'document') {

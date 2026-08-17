@@ -19,11 +19,16 @@
 
 `web/index.html`만 고치면 됩니다. GitHub 웹에서 연필 아이콘을 눌러 바로 수정하고 저장(Commit)하면, Netlify가 1~2분 안에 자동으로 새로 배포합니다.
 
-## 사용자 의견
+## 의견 게시판
 
-화면 맨 아래 의견 보내기 폼은 **Netlify Forms**로 처리됩니다. 받은 의견은
-Netlify 프로젝트 → **Forms** 탭 → `feedback`에서 볼 수 있습니다.
-새 의견이 올 때 메일로 받으려면 Forms → Settings → Form notifications에서 설정하세요.
+화면 맨 아래 게시판은 누구나 읽고 쓸 수 있습니다.
+
+- 저장: Netlify Blobs (별도 데이터베이스 없이 사이트에 딸려옴)
+- 처리: `netlify/functions/feedback.mjs`, 주소는 `/api/feedback`
+- 최근 300개까지 보관하고, 같은 내용을 1분 안에 다시 보내면 거절합니다
+
+**글을 지우려면** Netlify에서 환경변수 `ADMIN_KEY`를 정한 뒤, 앱 설정의
+'관리자 키' 칸에 같은 값을 넣으세요. 그러면 각 글에 지우기 버튼이 나타납니다.
 
 ## 알아둘 것
 

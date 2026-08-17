@@ -527,10 +527,30 @@
     font-size: 13.5px;
   }
   .fb-row .btn { flex: none; }
-  .hp { position: absolute; left: -9999px; }     /* 스팸봇용 미끼 칸 */
   .fb-status { margin-top: 10px; font-size: 13px; color: var(--ink-3); min-height: 20px; }
   .fb-status.done { color: var(--accent-deep); font-weight: 600; }
   .fb-status.error { color: var(--danger); }
+
+  .fb-list { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .fb-list li {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 13px;
+  }
+  .fb-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+  .fb-name { font-size: 12.5px; font-weight: 700; }
+  .fb-when { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .fb-del {
+    margin-left: auto;
+    font-size: 11.5px;
+    color: var(--ink-3);
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .fb-del:hover { color: var(--danger); background: var(--surface-2); }
+  .fb-text { font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+  .fb-empty { font-size: 13px; color: var(--ink-3); padding: 4px 0; }
 
   @media (max-width: 620px) {
     .top-in {
@@ -621,25 +641,23 @@
     <p class="legend" id="legend"></p>
   </section>
 
-  <!-- 의견 보내기 (Netlify Forms가 배포할 때 이 폼을 자동으로 인식한다) -->
+  <!-- 의견 게시판 -->
   <section class="feedback" id="feedback">
     <h2>불편한 점이 있나요?</h2>
-    <p>고쳤으면 하는 것, 있었으면 하는 기능을 남겨주세요. 읽고 반영하겠습니다.</p>
+    <p>고쳤으면 하는 것, 있었으면 하는 기능을 남겨주세요. 남긴 의견은 모두에게 보입니다.</p>
 
-    <form id="feedbackForm" name="feedback" method="POST" data-netlify="true" data-netlify-honeypot="bot-field">
-      <input type="hidden" name="form-name" value="feedback">
-      <input type="hidden" name="school" id="fbSchool" value="">
-      <p class="hp"><label>이 칸은 비워두세요 <input name="bot-field"></label></p>
-
-      <textarea name="message" id="fbMessage" rows="3" required
+    <form id="feedbackForm">
+      <textarea id="fbMessage" rows="3" maxlength="500" required
         placeholder="예: 석식은 안 봐도 되는데 화면이 너무 길어요"></textarea>
 
       <div class="fb-row">
-        <input type="text" name="contact" id="fbContact" placeholder="답장 받을 이메일 (선택)" autocomplete="email">
-        <button class="btn primary" type="submit" id="fbSubmit">보내기</button>
+        <input type="text" id="fbName" maxlength="20" placeholder="별명 (선택)" autocomplete="nickname">
+        <button class="btn primary" type="submit" id="fbSubmit">남기기</button>
       </div>
       <div id="fbStatus" class="fb-status"></div>
     </form>
+
+    <ol class="fb-list" id="fbList"></ol>
   </section>
 </main>
 
@@ -668,6 +686,17 @@
     </div>
 
     <div class="modal-sec">
+      <h3>관리자 키</h3>
+      <p>
+        의견 게시판의 글을 지울 수 있는 키입니다. 만든 사람만 쓰는 칸이니 비워두셔도 됩니다.
+      </p>
+      <div class="field">
+        <input type="password" id="adminInput" placeholder="관리자 키 (선택)" autocomplete="off">
+        <button class="btn" id="btnSaveAdmin">저장</button>
+      </div>
+    </div>
+
+    <div class="modal-sec">
       <h3>저장된 식단</h3>
       <p id="cacheInfo"></p>
       <button class="btn" id="btnClearCache">캐시 비우기</button>
@@ -688,6 +717,7 @@
     school: 'meal.school',
     key: 'meal.key',
     allergen: 'meal.allergen',
+    admin: 'meal.admin',
     cache: 'meal.cache.'
   };
   const ALLERGENS = {
@@ -1216,6 +1246,7 @@
   $('btnSettings').addEventListener('click', () => {
     $('curSchool').textContent = `${state.school.name} · ${state.school.office}`;
     $('keyInput').value = getKey();
+    $('adminInput').value = adminKey();
     $('cacheInfo').textContent = `${cacheCount()}일치 식단이 이 기기에 저장돼 있습니다.`;
     dlg.showModal();
   });
@@ -1236,6 +1267,15 @@
     state.data.clear();
     refresh();
   });
+  $('btnSaveAdmin').addEventListener('click', () => {
+    const v = $('adminInput').value.trim();
+    if (v) localStorage.setItem(LS.admin, v);
+    else localStorage.removeItem(LS.admin);
+    $('btnSaveAdmin').textContent = '저장됨';
+    setTimeout(() => { $('btnSaveAdmin').textContent = '저장'; }, 1400);
+    loadFeedback();
+  });
+
   $('btnClearCache').addEventListener('click', () => {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
@@ -1246,41 +1286,105 @@
     refresh();
   });
 
-  // ── 의견 보내기 ───────────────────────────
-  // Netlify Forms로 보낸다. 페이지를 벗어나지 않도록 직접 POST한다.
+  // ── 의견 게시판 ───────────────────────────
+  const FB_API = '/api/feedback';
+  const adminKey = () => localStorage.getItem(LS.admin) || '';
+
+  function fbSay(text, kind) {
+    const s = $('fbStatus');
+    s.className = 'fb-status' + (kind ? ' ' + kind : '');
+    s.textContent = text || '';
+  }
+
+  function whenText(iso) {
+    const then = new Date(iso), now = new Date();
+    const mins = Math.floor((now - then) / 60000);
+    if (mins < 1) return '방금';
+    if (mins < 60) return `${mins}분 전`;
+    if (mins < 60 * 24) return `${Math.floor(mins / 60)}시간 전`;
+    return `${then.getMonth() + 1}월 ${then.getDate()}일`;
+  }
+
+  function renderFeedback(entries) {
+    const list = $('fbList');
+    list.textContent = '';
+
+    if (!entries.length) {
+      list.append(el('li', 'fb-empty', '아직 남긴 의견이 없습니다. 첫 번째로 남겨보세요.'));
+      return;
+    }
+
+    for (const entry of entries) {
+      const li = el('li');
+      const head = el('div', 'fb-head');
+      head.append(el('span', 'fb-name', entry.name || '익명'));
+      head.append(el('span', 'fb-when', whenText(entry.at)));
+
+      if (adminKey()) {
+        const del = el('button', 'fb-del', '지우기');
+        del.type = 'button';
+        del.addEventListener('click', () => removeFeedback(entry.id));
+        head.append(del);
+      }
+
+      li.append(head);
+      li.append(el('div', 'fb-text', entry.message));
+      list.append(li);
+    }
+  }
+
+  async function loadFeedback() {
+    try {
+      const res = await fetch(FB_API, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      renderFeedback(data.entries || []);
+    } catch {
+      $('fbList').textContent = '';
+      $('fbList').append(el('li', 'fb-empty', '남긴 의견을 불러오지 못했습니다.'));
+    }
+  }
+
+  async function removeFeedback(id) {
+    try {
+      const res = await fetch(`${FB_API}?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-key': adminKey() }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '');
+      fbSay('지웠습니다.', 'done');
+      loadFeedback();
+    } catch (err) {
+      fbSay(err.message || '지우지 못했습니다.', 'error');
+    }
+  }
+
   $('feedbackForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const message = $('fbMessage').value.trim();
-    const status = $('fbStatus');
     if (!message) return;
 
-    const fields = {
-      'form-name': 'feedback',
-      message,
-      contact: $('fbContact').value.trim(),
-      school: state.school ? `${state.school.name} (${state.school.office})` : '학교 선택 전'
-    };
-
     $('fbSubmit').disabled = true;
-    status.className = 'fb-status';
-    status.textContent = '보내는 중…';
+    fbSay('남기는 중…');
 
     try {
-      const res = await fetch('/', {
+      const res = await fetch(FB_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: Object.entries(fields)
-          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-          .join('&')
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          name: $('fbName').value.trim(),
+          school: state.school ? state.school.name : ''
+        })
       });
-      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '');
       $('fbMessage').value = '';
-      $('fbContact').value = '';
-      status.className = 'fb-status done';
-      status.textContent = '보냈습니다. 읽고 반영할게요. 고맙습니다.';
-    } catch {
-      status.className = 'fb-status error';
-      status.textContent = '보내지 못했습니다. 인터넷 연결을 확인하고 다시 눌러주세요.';
+      fbSay('남겼습니다. 고맙습니다.', 'done');
+      loadFeedback();
+    } catch (err) {
+      fbSay(err.message || '남기지 못했습니다. 인터넷 연결을 확인해 주세요.', 'error');
     } finally {
       $('fbSubmit').disabled = false;
     }
@@ -1289,6 +1393,7 @@
   // ── 시작 ──────────────────────────────────
   pruneCache(false);
   setAllergen(state.showAllergen);
+  loadFeedback();
   if (state.school) showApp(); else showSetup();
 
   // 홈 화면 앱으로 쓸 때 오프라인에서도 열리도록. file://에서는 등록되지 않는다.
