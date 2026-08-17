@@ -565,6 +565,35 @@
   }
   .fb-del:hover { color: var(--danger); background: var(--surface-2); }
   .fb-text { font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+  .fb-reply {
+    margin-top: 9px;
+    padding: 9px 11px;
+    border-left: 2px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 8px 8px 0;
+  }
+  .fb-reply-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 2px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--accent-deep);
+  }
+  .fb-reply-form { margin-top: 9px; }
+  .fb-reply-form textarea {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13.5px;
+    resize: vertical;
+  }
+  .fb-reply-form .fb-row { margin-top: 6px; }
   .fb-empty { font-size: 13px; color: var(--ink-3); padding: 4px 0; }
 
   @media (max-width: 620px) {
@@ -667,7 +696,7 @@
 <dialog id="feedbackDialog">
   <div class="modal-in feedback">
     <h2>불편한 점이 있나요?</h2>
-    <p>고쳤으면 하는 것, 있었으면 하는 기능을 남겨주세요. 남긴 의견은 만든 사람만 봅니다.</p>
+    <p>고쳤으면 하는 것, 있었으면 하는 기능을 남겨주세요. 남긴 글은 만든 사람만 보고, 답장이 오면 여기에 표시됩니다.</p>
 
     <form id="feedbackForm">
       <textarea id="fbMessage" rows="3" maxlength="500" required
@@ -758,6 +787,7 @@
     key: 'meal.key',
     allergen: 'meal.allergen',
     admin: 'meal.admin',
+    who: 'meal.who',
     cache: 'meal.cache.'
   };
   const ALLERGENS = {
@@ -1289,7 +1319,7 @@
     fbSay('');
     renderFeedback();          // 이미 받아둔 글을 먼저 보여주고
     loadFeedback();            // 새 글이 있는지 다시 확인한다
-    $('feedbackDialog').showModal();
+    if (!$('feedbackDialog').open) $('feedbackDialog').showModal();
   });
   $('btnCloseFeedback').addEventListener('click', () => {
     $('feedbackDialog').close();
@@ -1361,6 +1391,16 @@
   const FB_API = '/api/feedback';
   const adminKey = () => localStorage.getItem(LS.admin) || '';
 
+  // 계정 대신 쓰는 기기별 표식. 이 값으로 자기가 남긴 글을 찾아온다.
+  function whoId() {
+    let id = localStorage.getItem(LS.who);
+    if (!id) {
+      id = `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+      localStorage.setItem(LS.who, id);
+    }
+    return id;
+  }
+
   function fbSay(text, kind) {
     const s = $('fbStatus');
     s.className = 'fb-status' + (kind ? ' ' + kind : '');
@@ -1379,18 +1419,15 @@
   let fbEntries = [];
 
   function renderFeedback() {
-    if (!adminKey()) {
-      fbEntries = [];
-      fbNote('남긴 의견은 만든 사람에게만 전달됩니다.');
-      return;
-    }
-
+    const admin = !!adminKey();
     const entries = fbEntries;
     const list = $('fbList');
     list.textContent = '';
 
     if (!entries.length) {
-      list.append(el('li', 'fb-empty', '아직 남긴 의견이 없습니다.'));
+      list.append(el('li', 'fb-empty', admin
+        ? '아직 남긴 의견이 없습니다.'
+        : '아직 남긴 의견이 없습니다. 남기시면 여기에 쌓이고, 답장도 여기에 옵니다.'));
       return;
     }
 
@@ -1400,7 +1437,12 @@
       head.append(el('span', 'fb-name', entry.name || '익명'));
       head.append(el('span', 'fb-when', whenText(entry.at)));
 
-      if (adminKey()) {
+      if (admin) {
+        const reply = el('button', 'fb-del', entry.reply ? '답장 고치기' : '답장');
+        reply.type = 'button';
+        reply.addEventListener('click', () => openReply(li, entry));
+        head.append(reply);
+
         const del = el('button', 'fb-del', '지우기');
         del.type = 'button';
         del.addEventListener('click', () => removeFeedback(entry.id));
@@ -1409,8 +1451,63 @@
 
       li.append(head);
       li.append(el('div', 'fb-text', entry.message));
+
+      if (entry.reply) {
+        const box = el('div', 'fb-reply');
+        const rhead = el('div', 'fb-reply-head');
+        rhead.append(el('span', null, '만든 사람의 답장'));
+        rhead.append(el('span', 'fb-when', whenText(entry.reply.at)));
+        box.append(rhead);
+        box.append(el('div', 'fb-text', entry.reply.text));
+        li.append(box);
+      }
+
       list.append(li);
     }
+  }
+
+  // 관리자가 글 아래에 답장을 쓰는 칸을 연다.
+  function openReply(li, entry) {
+    if (li.querySelector('.fb-reply-form')) return;
+
+    const form = el('form', 'fb-reply-form');
+    const input = el('textarea');
+    input.rows = 2;
+    input.maxLength = 500;
+    input.placeholder = '답장을 적어주세요';
+    input.value = entry.reply ? entry.reply.text : '';
+
+    const row = el('div', 'fb-row');
+    const send = el('button', 'btn primary', '답장 보내기');
+    send.type = 'submit';
+    const cancel = el('button', 'btn', '취소');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => form.remove());
+    row.append(send, cancel);
+
+    form.append(input, row);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      send.disabled = true;
+      try {
+        const res = await fetch(`${FB_API}?id=${encodeURIComponent(entry.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey() },
+          body: JSON.stringify({ reply: input.value.trim() })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '');
+        fbEntries = fbEntries.map((x) => (x.id === entry.id ? data.entry : x));
+        fbSay('답장을 보냈습니다.', 'done');
+        renderFeedback();
+      } catch (err) {
+        fbSay(err.message || '답장을 보내지 못했습니다.', 'error');
+        send.disabled = false;
+      }
+    });
+
+    li.append(form);
+    input.focus();
   }
 
   function fbNote(text) {
@@ -1420,16 +1517,14 @@
   }
 
   async function loadFeedback() {
-    // 관리자 키가 없으면 애초에 요청하지 않는다.
-    if (!adminKey()) {
-      fbEntries = [];
-      fbNote('남긴 의견은 만든 사람에게만 전달됩니다.');
-      return;
+    const headers = { Accept: 'application/json' };
+    let target = `${FB_API}?author=${encodeURIComponent(whoId())}`;
+    if (adminKey()) {
+      headers['x-admin-key'] = adminKey();
+      target = FB_API;
     }
     try {
-      const res = await fetch(FB_API, {
-        headers: { Accept: 'application/json', 'x-admin-key': adminKey() }
-      });
+      const res = await fetch(target, { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '');
       fbEntries = data.entries || [];
@@ -1471,14 +1566,15 @@
         body: JSON.stringify({
           message,
           name: $('fbName').value.trim(),
-          school: state.school ? state.school.name : ''
+          school: state.school ? state.school.name : '',
+          author: whoId()
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '');
       $('fbMessage').value = '';
       fbSay('남겼습니다. 고맙습니다.', 'done');
-      if (data.entry && adminKey()) { fbEntries = [data.entry, ...fbEntries]; renderFeedback(); }
+      if (data.entry) { fbEntries = [data.entry, ...fbEntries]; renderFeedback(); }
     } catch (err) {
       fbSay(err.message || '남기지 못했습니다. 인터넷 연결을 확인해 주세요.', 'error');
     } finally {
