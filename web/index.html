@@ -698,12 +698,13 @@
 
     <div class="modal-sec">
       <h3>관리자 키</h3>
-      <p>
-        의견 게시판의 글을 지울 수 있는 키입니다. 만든 사람만 쓰는 칸이니 비워두셔도 됩니다.
+      <p id="adminNote">
+        남긴 의견을 읽고 지우려면 필요한 키입니다. 만든 사람만 쓰는 칸이니 비워두셔도 됩니다.
       </p>
       <div class="field">
         <input type="password" id="adminInput" placeholder="관리자 키 (선택)" autocomplete="off">
         <button class="btn" id="btnSaveAdmin">저장</button>
+        <button class="btn" id="btnExitAdmin" hidden>나가기</button>
       </div>
     </div>
 
@@ -1266,6 +1267,7 @@
     $('curSchool').textContent = `${state.school.name} · ${state.school.office}`;
     $('keyInput').value = getKey();
     $('adminInput').value = adminKey();
+    showAdminState();
     $('cacheInfo').textContent = `${cacheCount()}일치 식단이 이 기기에 저장돼 있습니다.`;
     dlg.showModal();
   });
@@ -1286,12 +1288,28 @@
     state.data.clear();
     refresh();
   });
+  function showAdminState() {
+    const on = !!adminKey();
+    $('btnExitAdmin').hidden = !on;
+    $('adminNote').textContent = on
+      ? '관리자로 들어와 있습니다. 의견을 읽고 지울 수 있습니다.'
+      : '남긴 의견을 읽고 지우려면 필요한 키입니다. 만든 사람만 쓰는 칸이니 비워두셔도 됩니다.';
+  }
+
+  $('btnExitAdmin').addEventListener('click', () => {
+    localStorage.removeItem(LS.admin);
+    $('adminInput').value = '';
+    showAdminState();
+    loadFeedback();
+  });
+
   $('btnSaveAdmin').addEventListener('click', () => {
     const v = $('adminInput').value.trim();
     if (v) localStorage.setItem(LS.admin, v);
     else localStorage.removeItem(LS.admin);
     $('btnSaveAdmin').textContent = '저장됨';
     setTimeout(() => { $('btnSaveAdmin').textContent = '저장'; }, 1400);
+    showAdminState();
     loadFeedback();
   });
 
