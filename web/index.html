@@ -481,17 +481,11 @@
   .legend b { color: var(--ink-2); font-weight: 600; }
 
   /* ── 의견 보내기 ──────────────────────── */
-  .feedback {
-    margin-top: 40px;
-    padding-top: 26px;
-    border-top: 1px solid var(--line);
-    max-width: 560px;
-  }
   .feedback h2 {
     margin: 0 0 4px;
-    font-size: 15.5px;
+    font-size: 18px;
     font-weight: 700;
-    letter-spacing: -.015em;
+    letter-spacing: -.02em;
   }
   .feedback > p {
     margin: 0 0 14px;
@@ -531,7 +525,16 @@
   .fb-status.done { color: var(--accent-deep); font-weight: 600; }
   .fb-status.error { color: var(--danger); }
 
-  .fb-list { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .fb-list {
+    list-style: none;
+    margin: 18px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 44vh;
+    overflow-y: auto;
+  }
   .fb-list li {
     background: var(--surface);
     border: 1px solid var(--line);
@@ -579,7 +582,7 @@
 
   @media print {
     :root { --bg: #fff; --surface: #fff; --surface-2: #fff; --line: #bbb; --ink: #000; --ink-2: #333; --ink-3: #555; --shadow: none; }
-    header.top, .top-actions, .controls, .legend, details.info, dialog, .feedback { display: none !important; }
+    header.top, .top-actions, .controls, .legend, details.info, dialog { display: none !important; }
     .hero { break-inside: avoid; }
     .grid { grid-template-columns: repeat(5, 1fr); gap: 6px; }
     .day { break-inside: avoid; }
@@ -597,6 +600,7 @@
     </div>
     <div class="top-actions">
       <button class="btn" id="btnAllergen" aria-pressed="false">알레르기</button>
+      <button class="btn" id="btnFeedback">의견</button>
       <button class="btn" id="btnSettings">설정</button>
     </div>
   </div>
@@ -641,8 +645,11 @@
     <p class="legend" id="legend"></p>
   </section>
 
-  <!-- 의견 게시판 -->
-  <section class="feedback" id="feedback">
+</main>
+
+<!-- 의견 게시판 -->
+<dialog id="feedbackDialog">
+  <div class="modal-in feedback">
     <h2>불편한 점이 있나요?</h2>
     <p>고쳤으면 하는 것, 있었으면 하는 기능을 남겨주세요. 남긴 의견은 모두에게 보입니다.</p>
 
@@ -658,8 +665,12 @@
     </form>
 
     <ol class="fb-list" id="fbList"></ol>
-  </section>
-</main>
+
+    <div class="modal-foot">
+      <button class="btn" id="btnCloseFeedback">닫기</button>
+    </div>
+  </div>
+</dialog>
 
 <!-- 설정 -->
 <dialog id="settings">
@@ -1243,6 +1254,14 @@
 
   // ── 설정 ──────────────────────────────────
   const dlg = $('settings');
+  $('btnFeedback').addEventListener('click', () => {
+    fbSay('');
+    renderFeedback();          // 이미 받아둔 글을 먼저 보여주고
+    loadFeedback();            // 새 글이 있는지 다시 확인한다
+    $('feedbackDialog').showModal();
+  });
+  $('btnCloseFeedback').addEventListener('click', () => $('feedbackDialog').close());
+
   $('btnSettings').addEventListener('click', () => {
     $('curSchool').textContent = `${state.school.name} · ${state.school.office}`;
     $('keyInput').value = getKey();
@@ -1398,7 +1417,6 @@
   // ── 시작 ──────────────────────────────────
   pruneCache(false);
   setAllergen(state.showAllergen);
-  loadFeedback();
   if (state.school) showApp(); else showSetup();
 
   // 홈 화면 앱으로 쓸 때 오프라인에서도 열리도록. file://에서는 등록되지 않는다.
