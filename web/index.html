@@ -1273,7 +1273,7 @@
     else localStorage.removeItem(LS.admin);
     $('btnSaveAdmin').textContent = '저장됨';
     setTimeout(() => { $('btnSaveAdmin').textContent = '저장'; }, 1400);
-    loadFeedback();
+    renderFeedback();
   });
 
   $('btnClearCache').addEventListener('click', () => {
@@ -1305,7 +1305,10 @@
     return `${then.getMonth() + 1}월 ${then.getDate()}일`;
   }
 
-  function renderFeedback(entries) {
+  let fbEntries = [];
+
+  function renderFeedback() {
+    const entries = fbEntries;
     const list = $('fbList');
     list.textContent = '';
 
@@ -1338,7 +1341,8 @@
       const res = await fetch(FB_API, { headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
-      renderFeedback(data.entries || []);
+      fbEntries = data.entries || [];
+      renderFeedback();
     } catch {
       $('fbList').textContent = '';
       $('fbList').append(el('li', 'fb-empty', '남긴 의견을 불러오지 못했습니다.'));
@@ -1354,7 +1358,8 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '');
       fbSay('지웠습니다.', 'done');
-      loadFeedback();
+      fbEntries = fbEntries.filter((e) => e.id !== id);
+      renderFeedback();
     } catch (err) {
       fbSay(err.message || '지우지 못했습니다.', 'error');
     }
@@ -1382,7 +1387,7 @@
       if (!res.ok) throw new Error(data.error || '');
       $('fbMessage').value = '';
       fbSay('남겼습니다. 고맙습니다.', 'done');
-      loadFeedback();
+      if (data.entry) { fbEntries = [data.entry, ...fbEntries]; renderFeedback(); }
     } catch (err) {
       fbSay(err.message || '남기지 못했습니다. 인터넷 연결을 확인해 주세요.', 'error');
     } finally {

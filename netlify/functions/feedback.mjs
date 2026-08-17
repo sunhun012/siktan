@@ -17,7 +17,8 @@ const clean = (v, max) =>
   typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '';
 
 export default async (req) => {
-  const store = getStore('feedback');
+  // consistency: 'strong' — 방금 남긴 글이 바로 읽히도록. 기본값이면 최대 1분 늦게 보인다.
+  const store = getStore({ name: 'feedback', consistency: 'strong' });
   const read = async () => (await store.get(KEY, { type: 'json' })) || [];
 
   if (req.method === 'GET') {
